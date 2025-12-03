@@ -85,6 +85,11 @@ export default function AdmMaster() {
 
 	const removerEscola = async (id_escola) => {
 		if (!confirm("Deseja realmente excluir esta escola?")) return;
+
+		// Otimisticamente remove da UI para resposta imediata
+		const prevEscolas = escolas;
+		setEscolas((s) => s.filter((x) => x.id_escola !== id_escola));
+
 		try {
 			setLoading(true);
 
@@ -146,17 +151,19 @@ export default function AdmMaster() {
 				throw errEscola;
 			}
 			console.debug("Escola removida (resposta):", removedEscola, { status, statusText });
-			if (errEscola) throw errEscola;
-
-			// Se o banco retornou linhas removidas, atualizamos o estado local
-			if (removedEscola && removedEscola.length > 0) {
-				setEscolas((s) => s.filter((x) => x.id_escola !== id_escola));
-				toast({ title: "Removido", description: `Escola e dependências removidas (${removedEscola.length}).` });
-			} else {
+			if (!removedEscola || removedEscola.length === 0) {
+				// rollback: a remoção não aconteceu no servidor
+				setEscolas(prevEscolas);
 				console.warn("Remoção não retornou linhas (possível RLS/permissão):", removedEscola);
 				toast({ title: "Não removido", description: "A operação não removeu registros no banco. Verifique permissões (RLS) e console." });
+				return;
 			}
+
+			// sucesso: já foi removida da UI (otimisticamente)
+			toast({ title: "Removido", description: `Escola e dependências removidas (${removedEscola.length}).` });
 		} catch (e) {
+			// rollback em caso de erro
+			setEscolas(prevEscolas);
 			console.error("Erro remover escola:", e);
 			toast({ title: "Erro", description: "Não foi possível remover a escola. Veja o console." });
 		} finally {
