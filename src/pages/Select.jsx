@@ -149,8 +149,38 @@ export default function Select() {
         // PEGAR O ID CERTO
         idEscola = escolaInsert.id_escola;
       } else {
-        // Para Sesc/Senac não criamos o registro em `escola`; mantemos idEscola null
-        idEscola = null;
+        // Para Sesc/Senac: garantir que exista uma entrada em `escola`.
+        // Em alguns setups a tabela `lanchonete.id_escola` é NOT NULL, então
+        // precisamos criar (ou recuperar) a escola antes de criar a lanchonete.
+        try {
+          const { data: escolaSpecial, error: escolaSpecialError } = await supabase
+            .from("escola")
+            .insert([{ nome_escola: nomeEscola }])
+            .select()
+            .single();
+
+          if (escolaSpecialError) {
+            console.error("Erro ao criar escola especial:", escolaSpecialError);
+            // se for RLS ou permissão, avisa o usuário
+            if (escolaSpecialError?.status === 401 || escolaSpecialError?.code === "42501") {
+              toast({
+                title: "Operação bloqueada",
+                description:
+                  "Não foi possível criar a escola necessária. Verifique permissões (RLS) ou crie a escola no painel do Supabase.",
+                variant: "destructive",
+              });
+              return;
+            }
+            toast({ title: "Erro ao criar escola", description: JSON.stringify(escolaSpecialError), variant: "destructive" });
+            return;
+          }
+
+          idEscola = escolaSpecial?.id_escola || null;
+        } catch (e) {
+          console.error("Exceção ao criar escola especial:", e);
+          toast({ title: "Erro inesperado", description: String(e), variant: "destructive" });
+          return;
+        }
       }
 
       // 2️⃣ INSERIR LANCHONETE VINCULADA
